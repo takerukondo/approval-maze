@@ -1,8 +1,12 @@
-"""One synthetic enterprise demo scenario (not real company policy)."""
+"""Load and run synthetic approval scenarios."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib.resources import files
+import json
+from pathlib import Path
+from typing import Any
 
 from approval_maze.engine import MazeState, ToolCallResult, new_maze
 from approval_maze.roles import Role
@@ -23,32 +27,57 @@ class ScenarioResult:
     failures: list[str]
 
 
-# Synthetic Acme-JP demo: agent tries external send before legal/IT approve.
-SCENARIO_STEPS: list[ScenarioStep] = [
-    ScenarioStep("tool:read_doc", expect_allow=False),  # needs 稟議
-    ScenarioStep("approve:稟議"),
-    ScenarioStep("tool:read_doc", expect_allow=True),
-    ScenarioStep("tool:send_external", expect_allow=False),  # needs 法務+情シス
-    ScenarioStep("approve:法務"),
-    ScenarioStep("tool:send_external", expect_allow=False),  # still 情シス
-    ScenarioStep("approve:情シス"),
-    ScenarioStep("tool:send_external", expect_allow=True),
-    ScenarioStep("tool:change_prod", expect_allow=False),  # needs 現場 too
-    ScenarioStep("approve:現場"),
-    ScenarioStep("tool:change_prod", expect_allow=True),
-]
-
-
 ROLE_BY_LABEL = {r.value: r for r in Role}
+
+
+def _parse_scenario(payload: Any) -> tuple[str, list[ScenarioStep]]:
+    if not isinstance(payload, dict):
+        raise ValueError("scenario must be a JSON object")
+    name = payload.get("name")
+    raw_steps = payload.get("steps")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("scenario.name must be a non-empty string")
+    if not isinstance(raw_steps, list) or not raw_steps:
+        raise ValueError("scenario.steps must be a non-empty list")
+
+    steps: list[ScenarioStep] = []
+    for index, raw in enumerate(raw_steps, start=1):
+        if not isinstance(raw, dict) or not isinstance(raw.get("action"), str):
+            raise ValueError(f"scenario step {index} must contain a string action")
+        unknown = set(raw) - {"action", "expect_allow"}
+        if unknown:
+            raise ValueError(
+                f"scenario step {index} has unknown fields: {', '.join(sorted(unknown))}"
+            )
+        expected = raw.get("expect_allow")
+        if expected is not None and not isinstance(expected, bool):
+            raise ValueError(f"scenario step {index}.expect_allow must be boolean")
+        steps.append(ScenarioStep(raw["action"], expected))
+    return name, steps
+
+
+def load_scenario(path: Path | None = None) -> tuple[str, list[ScenarioStep]]:
+    """Load a scenario from disk, or the example bundled in the wheel."""
+    if path is None:
+        source = files("approval_maze").joinpath("data/enterprise_demo.json")
+        payload = json.loads(source.read_text(encoding="utf-8"))
+    else:
+        with path.open(encoding="utf-8") as handle:
+            payload = json.load(handle)
+    return _parse_scenario(payload)
 
 
 def run_scenario(
     steps: list[ScenarioStep] | None = None,
     *,
-    name: str = "enterprise_demo",
+    name: str | None = None,
 ) -> ScenarioResult:
+    if steps is None:
+        loaded_name, steps = load_scenario()
+        name = name or loaded_name
+    else:
+        name = name or "custom"
     maze = new_maze()
-    steps = steps or SCENARIO_STEPS
     failures: list[str] = []
     for i, step in enumerate(steps, start=1):
         if step.action.startswith("tool:"):
@@ -66,6 +95,9 @@ def run_scenario(
                 )
         elif step.action.startswith("approve:"):
             label = step.action.split(":", 1)[1]
+            if label not in ROLE_BY_LABEL:
+                failures.append(f"step {i}: unknown role {label!r}")
+                continue
             role = ROLE_BY_LABEL[label]
             maze.schedule_approvals(role, delay=1.0)
             maze.advance(1.0)

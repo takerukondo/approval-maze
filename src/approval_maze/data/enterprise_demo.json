@@ -1,0 +1,16 @@
+{
+  "name": "enterprise_demo",
+  "steps": [
+    {"action": "tool:read_doc", "expect_allow": false},
+    {"action": "approve:稟議"},
+    {"action": "tool:read_doc", "expect_allow": true},
+    {"action": "tool:send_external", "expect_allow": false},
+    {"action": "approve:法務"},
+    {"action": "tool:send_external", "expect_allow": false},
+    {"action": "approve:情シス"},
+    {"action": "tool:send_external", "expect_allow": true},
+    {"action": "tool:change_prod", "expect_allow": false},
+    {"action": "approve:現場"},
+    {"action": "tool:change_prod", "expect_allow": true}
+  ]
+}

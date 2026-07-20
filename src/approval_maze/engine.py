@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from approval_maze.des import DiscreteEventClock, EventKind
-from approval_maze.roles import Role
+from approval_maze.roles import Role, role_sort_key
 from approval_maze.tools import TOOLS, ToolSpec, get_tool
 
 
@@ -39,7 +39,7 @@ class MazeState:
         return f"req-{self.request_counter}-{tool}"
 
     def missing_for(self, tool: ToolSpec) -> list[Role]:
-        return sorted(tool.required_gates - self.granted, key=lambda r: r.value)
+        return sorted(tool.required_gates - self.granted, key=role_sort_key)
 
     def try_tool(self, tool_name: str) -> ToolCallResult:
         tool = get_tool(tool_name)
@@ -76,7 +76,7 @@ class MazeState:
             allowed=True,
             tool=tool_name,
             request_id=request_id,
-            granted_roles=sorted(tool.required_gates, key=lambda r: r.value),
+            granted_roles=sorted(tool.required_gates, key=role_sort_key),
         )
 
     def schedule_approvals(self, role: Role, delay: float = 1.0) -> None:
@@ -85,7 +85,6 @@ class MazeState:
 
     def advance(self, dt: float = 1.0) -> None:
         target = self.clock.now + dt
-        before = set(self.granted)
         events = self.clock.run_until(target)
         for ev in events:
             if ev.kind == EventKind.APPROVE and ev.role is not None:
@@ -95,10 +94,6 @@ class MazeState:
                 )
                 # Clear any remaining queue items for this role after grant.
                 self.clock.queues[ev.role].clear()
-        newly = self.granted - before
-        if newly and not events:
-            # Direct grant path (approve with empty queue still opens gate).
-            pass
 
     def grant_now(self, role: Role) -> None:
         """Immediate approval (for interactive play / tests)."""

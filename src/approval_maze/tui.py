@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from approval_maze.engine import MazeState, known_tools
-from approval_maze.roles import ALL_ROLES, Role
+from approval_maze.roles import ALL_ROLES, Role, role_sort_key
 from approval_maze.tools import TOOLS
 
 
@@ -25,7 +25,7 @@ def render(maze: MazeState) -> str:
     lines.append("Tools → required gates:")
     for name in known_tools():
         spec = TOOLS[name]
-        need = "/".join(r.value for r in sorted(spec.required_gates, key=lambda r: r.value))
+        need = "/".join(r.value for r in sorted(spec.required_gates, key=role_sort_key))
         missing = maze.missing_for(spec)
         mark = "ok" if not missing else "BLOCKED:" + "/".join(r.value for r in missing)
         lines.append(f"  {name:14} needs {need:20} → {mark}")

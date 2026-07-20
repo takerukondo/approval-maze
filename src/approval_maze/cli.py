@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 import sys
 
 from approval_maze.engine import new_maze
-from approval_maze.scenario import run_scenario
+from approval_maze.scenario import load_scenario, run_scenario
 from approval_maze.tui import interactive_loop, render
 
 
@@ -20,8 +21,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_demo = sub.add_parser("demo", help="run the fixed enterprise_demo scenario")
+    p_demo = sub.add_parser("demo", help="run the bundled or a custom scenario")
     p_demo.add_argument("--quiet", action="store_true")
+    p_demo.add_argument(
+        "--scenario",
+        type=Path,
+        help="JSON scenario file (defaults to the example bundled in the package)",
+    )
 
     sub.add_parser("play", help="interactive TUI (tool / approve / advance)")
 
@@ -31,7 +37,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.cmd == "demo":
-        result = run_scenario()
+        try:
+            name, steps = load_scenario(args.scenario)
+            result = run_scenario(steps, name=name)
+        except (OSError, ValueError) as exc:
+            print(f"invalid scenario: {exc}", file=sys.stderr)
+            return 2
         if not args.quiet:
             for line in result.log:
                 print(line)

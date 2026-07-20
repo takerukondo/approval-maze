@@ -19,3 +19,10 @@ jobs:
         run: pytest -q
       - name: Demo scenario
         run: approval-maze demo --quiet
+      - name: Build wheel and source distribution
+        run: python -m build
+      - name: Smoke-test the wheel
+        run: |
+          python -m venv /tmp/approval-maze-wheel
+          /tmp/approval-maze-wheel/bin/pip install dist/*.whl
+          /tmp/approval-maze-wheel/bin/approval-maze demo --quiet

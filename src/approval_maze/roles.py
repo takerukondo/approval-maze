@@ -20,3 +20,8 @@ ALL_ROLES: tuple[Role, ...] = (
     Role.JOUSHIS,
     Role.GENBA,
 )
+
+
+def role_sort_key(role: Role) -> int:
+    """Keep output in the business-flow order above, not Unicode order."""
+    return ALL_ROLES.index(role)
